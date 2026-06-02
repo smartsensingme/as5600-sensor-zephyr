@@ -3,17 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "as5600.h"
+#include "kalman.h"
 #include <stdio.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/kernel.h>
-#include "as5600.h"
-#include "kalman.h"
 
 /* Update the specialized 2D Kalman Filter for rotary/angular sensor (with
  * wrap-around) */
-static __attribute__((unused)) void engine_angle_kalman_2d_update(struct kalman_2d *k,
-                                          float measured_angle, float dt) {
+static __attribute__((unused)) void
+engine_angle_kalman_2d_update(struct kalman_2d *k, float measured_angle,
+                              float dt) {
   /* --- 1. PREDICT STEP --- */
   /* x_pred = F * x */
   float x_pred_theta = k->x[0] + k->x[1] * dt;
@@ -129,7 +130,7 @@ static void engine_angle_kalman_3d_update(struct kalman_3d *k,
     k->x[0] += 360.0f;
   }
 
-  /* Correct Covariance: P = (I - K * H) * P_pred */
+  /* Correct Covariance: P = (I - K * H) * caP_pred */
   k->P[0][0] = (1.0f - K_0) * P_pred_00;
   k->P[0][1] = (1.0f - K_0) * P_pred_01;
   k->P[0][2] = (1.0f - K_0) * P_pred_02;
@@ -142,8 +143,6 @@ static void engine_angle_kalman_3d_update(struct kalman_3d *k,
   k->P[2][1] = k->P[1][2];
   k->P[2][2] = P_pred_22 - K_2 * P_pred_02;
 }
-
-
 
 /* Helper function to print a float by splitting it into integer and fraction (3
  * decimal places). It receives a format string which must accept two integer
@@ -237,9 +236,11 @@ int main(void) {
     /* Read and print status every 2 seconds (2000 loops at 1 ms delay) */
     if (loop_count % 2000 == 0) {
       struct sensor_value status_val;
-      int ret = sensor_sample_fetch_chan(dev, (enum sensor_channel)SENSOR_CHAN_STATUS);
+      int ret = sensor_sample_fetch_chan(
+          dev, (enum sensor_channel)SENSOR_CHAN_STATUS);
       if (ret >= 0) {
-        sensor_channel_get(dev, (enum sensor_channel)SENSOR_CHAN_STATUS, &status_val);
+        sensor_channel_get(dev, (enum sensor_channel)SENSOR_CHAN_STATUS,
+                           &status_val);
         uint8_t status = (uint8_t)status_val.val1;
 
         bool md = (status & AS5600_STATUS_MD) != 0;
@@ -247,8 +248,7 @@ int main(void) {
         bool mh = (status & AS5600_STATUS_MH) != 0;
 
         printf("[AS5600 Status] Byte: 0x%02X | Magnet: %s | Strength: %s\n",
-               status,
-               md ? "DETECTED" : "NOT DETECTED",
+               status, md ? "DETECTED" : "NOT DETECTED",
                ml ? "TOO WEAK" : (mh ? "TOO STRONG" : "OK"));
       } else {
         printf("[AS5600 Status] Error reading status: %d\n", ret);
@@ -283,4 +283,3 @@ int main(void) {
 
   return 0;
 }
-

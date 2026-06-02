@@ -4,13 +4,13 @@
 
 This repository contains a demonstration of the integration of the **AS5600** magnetic encoder with **Zephyr RTOS**, utilizing a native *out-of-tree* sensor driver and an advanced **3D Kalman Filter** to estimate the position, speed (RPM), and acceleration (RPM/s) of a rotating shaft in real time.
 
-The project is configured to run on the **WeAct STM32G431 Core Board** development board.
+The project is configured to run on the **WeAct STM32G431 Core Board** development board and consumes its external dependencies through Git submodules.
 
 ---
 
 ## 🛠️ Driver Architecture (`custom_as5600`)
 
-The AS5600 driver is implemented as an external module and exposes encoder readings through the standard Zephyr RTOS sensor API (`<zephyr/drivers/sensor.h>`).
+The AS5600 driver is hosted in the [zephyr_custom_drivers](https://github.com/smartsensingme/zephyr_custom_drivers.git) repository and is imported into this project as a local submodule in the `custom_drivers` directory. It exposes encoder readings through the standard Zephyr RTOS sensor API (`<zephyr/drivers/sensor.h>`).
 
 ### Supported Sensor Channels
 The driver provides three channels for sampling:
@@ -29,12 +29,12 @@ The driver provides three channels for sampling:
 
 ## 📈 Kalman Filter (2D and 3D)
 
-The project includes a linear Kalman Filter library in [kalman.h](file:///Volumes/data2005/jalexdefranca/Coding/src/ZephyrRTOS/STM/AS5600/src/kalman.h) and [kalman.c](file:///Volumes/data2005/jalexdefranca/Coding/src/ZephyrRTOS/STM/AS5600/src/kalman.c) that implements the classical equations for 2D and 3D state-space models:
+The project consumes the pure C Kalman Filter library from [kalman-filter-c](https://github.com/smartsensingme/kalman-filter-c.git) (mapped under the directory [src/kalman-filter-c](src/kalman-filter-c)), which implements the classical equations for 2D and 3D state-space models:
 *   **2D Kalman:** Estimates angular position ($\theta$) and angular velocity ($\omega$).
 *   **3D Kalman:** Estimates angular position ($\theta$), angular velocity ($\omega$), and angular acceleration ($\alpha$).
 
 ### Angular Transition Correction (Wrap-around)
-Due to the circular behavior of the encoder ($0^\circ \to 360^\circ$), the main loop ([main.c](file:///Volumes/data2005/jalexdefranca/Coding/src/ZephyrRTOS/STM/AS5600/src/main.c)) implements the specialized function `engine_angle_kalman_3d_update` (and the alternative `engine_angle_kalman_2d_update`) to normalize the measurement error (innovation) to the range of $[-180^\circ, 180^\circ]$.
+Due to the circular behavior of the encoder ($0^\circ \to 360^\circ$), the main loop ([main.c](src/main.c)) implements the specialized function `engine_angle_kalman_3d_update` (and the alternative `engine_angle_kalman_2d_update`) to normalize the measurement error (innovation) to the range of $[-180^\circ, 180^\circ]$.
 
 This prevents false spikes and instability in the velocity and acceleration calculations when the sensor transitions through the physical boundary between $360^\circ$ and $0^\circ$. The final angle estimate is always kept strictly in the range $[0^\circ, 360^\circ)$.
 
@@ -77,18 +77,28 @@ CONFIG_AS5600_THREAD_SAFE=n
 
 ## 🚀 How to Compile and Run
 
-1.  **Compile the Project:**
+1.  **Clone the project and its dependencies:**
+    Since this repository uses Git submodules to manage its external dependencies, clone the project using the `--recursive` flag:
+    ```bash
+    git clone --recursive git@github-ssme:smartsensingme/as5600-sensor-zephyr.git
+    ```
+    If you have already cloned the project without submodules, fetch the dependencies by running:
+    ```bash
+    git submodule update --init --recursive
+    ```
+
+2.  **Compile the Project:**
     Use the `west` utility specifying the target board:
     ```bash
     west build -b weact_stm32g431_core/stm32g431xx --pristine
     ```
 
-2.  **Flash the Firmware:**
+3.  **Flash the Firmware:**
     ```bash
     west flash
     ```
 
-3.  **View Serial Output:**
+4.  **View Serial Output:**
     The application runs the reading and Kalman Filter loop at **1 kHz** (`dt = 0.001s`). Logs are displayed at a controlled rate of 5 Hz (every 200 ms) to avoid saturating the serial port, and the magnet diagnostics are updated every 2 seconds:
     
     ```text
@@ -105,7 +115,7 @@ CONFIG_AS5600_THREAD_SAFE=n
 
 ## 📦 How to Reuse this Driver in Another Project
 
-Since the driver was developed according to Zephyr's *out-of-tree* development guidelines, you can easily reuse it in two ways:
+Since the driver was developed according to Zephyr's *out-of-tree* development guidelines and is hosted in the [zephyr_custom_drivers](https://github.com/smartsensingme/zephyr_custom_drivers.git) repository, you can easily reuse it in any other Zephyr project in two ways:
 
 ### Option A: Direct Copy to the Project
 1.  Copy the `drivers/` and `dts/` folders from the `custom_drivers/` directory to the root of your new project.
@@ -119,18 +129,22 @@ Since the driver was developed according to Zephyr's *out-of-tree* development g
     osource "drivers/Kconfig"
     ```
 
-### Option B: Addition as an External Module (Recommended)
-This option keeps the driver centralized in a single folder and avoids unnecessary file copies.
-1.  In your new project's `CMakeLists.txt`, append the absolute or relative location of the `custom_drivers` repository to the `ZEPHYR_EXTRA_MODULES` variable **before** including the main Zephyr package:
+### Option B: Addition as an External Module / Git Submodule (Recommended)
+This option keeps the driver centralized as a clean external dependency.
+1.  In your new project, add the driver repository as a submodule:
+    ```bash
+    git submodule add https://github.com/smartsensingme/zephyr_custom_drivers.git custom_drivers
+    ```
+2.  In your main `CMakeLists.txt`, append the submodule location to the `ZEPHYR_EXTRA_MODULES` variable **before** including the main Zephyr package:
     ```cmake
     cmake_minimum_required(VERSION 3.20.0)
     
-    list(APPEND ZEPHYR_EXTRA_MODULES "/path/to/custom_drivers")
+    list(APPEND ZEPHYR_EXTRA_MODULES "${CMAKE_CURRENT_LIST_DIR}/custom_drivers")
     
     find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
     project(my_new_project)
     ```
-2.  Now you can add the declarations in your `app.overlay` and enable it with `CONFIG_AS5600=y` in `prj.conf`.
+3.  Declare the sensor in your `app.overlay` and enable it with `CONFIG_AS5600=y` in `prj.conf`.
 
 ---
 ![SmartSensing.me Logo](https://smartsensing.me/ssme-logo.png)
@@ -148,11 +162,12 @@ Unlike superficial, clickbait content, this repository delivers:
 
 ---
 
-## 🛠️ Technologies
-- **Target Hardware:** ESP32 / ESP32-S3
-- **Framework:** ESP-IDF v5.x / v6.x
-- **Language:** C / C++
-- **Simulation:** LTSpice (Sensor Modeling)
+## 🛠️ Technologies and Compatibility
+- **Language:** Pure C (C99 or higher) and C++
+- **Target Hardware:** Any microcontroller architecture (ESP32, STM32, ARM Cortex, RISC-V, AVR, etc.) or desktop architecture
+- **Environments/RTOS:** ESP-IDF (as a native Component), Zephyr RTOS, FreeRTOS, Bare-metal, Desktop (Windows, Linux, macOS)
+- **Build System:** Native CMake
+- **Simulation:** LTSpice (Sensor modeling and validation)
 
 ---
 
