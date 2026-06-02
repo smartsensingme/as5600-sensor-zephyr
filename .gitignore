@@ -1,0 +1,17 @@
+# Zephyr build artifacts
+build/
+
+# IDE files
+.vscode/
+.idea/
+.clang-format
+.cmake/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+.cache/
+
+# Emacs/Vim temporary files
+*~
+*.swp

@@ -1,0 +1,29 @@
+/*
+ * Copyright (c) 2026
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	aliases {
+		as5600 = &as5600;
+	};
+};
+
+&i2c1 {
+	status = "disabled";
+};
+
+&i2c2 {
+	status = "okay";
+	pinctrl-0 = <&i2c2_scl_pa9 &i2c2_sda_pa8>; /* SCL no PA9, SDA no PA8 */
+	pinctrl-names = "default";
+	clock-frequency = <400000>;
+
+	as5600: as5600@36 {
+		compatible = "custom,as5600";
+		reg = <0x36>;				/* Endereço padrão de fábrica do sensor AS5600 */
+		hysteresis = <0>;           /* 0 LSB (Sem histerese para dados brutos mais precisos) */
+		slow-filter = <2>;          /* 2x slow filter */
+		fast-filter-threshold = <2>; /* 2 LSB fast filter threshold */
+	};	
+};

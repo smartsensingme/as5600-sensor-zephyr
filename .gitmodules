@@ -1,0 +1,6 @@
+[submodule "src/kalman-filter-c"]
+	path = src/kalman-filter-c
+	url = https://github.com/smartsensingme/kalman-filter-c.git
+[submodule "custom_drivers"]
+	path = custom_drivers
+	url = https://github.com/smartsensingme/zephyr_custom_drivers.git
