@@ -9,8 +9,11 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(hello_word_AS5300)
 
 target_sources(app PRIVATE src/main.c)
-target_include_directories(app PRIVATE "${CUSTOM_DRIVERS_DIR}/drivers/sensor/as5600")
+target_include_directories(app PRIVATE "${CUSTOM_DRIVERS_DIR}/drivers/sensor/as5600" src/engine-driver)
 
 add_subdirectory(src/kalman-filter-c)
 target_link_libraries(app PRIVATE kalman)
+
+add_subdirectory(src/engine-driver)
+target_link_libraries(app PRIVATE engine_driver)
 

@@ -1,0 +1,10 @@
+# Kconfig
+mainmenu "AS5600 Encoder and Engine Control"
+
+config ENGINE_THREAD_SAFE
+	bool "Enable Thread-Safe Mode for Engine Driver"
+	default n
+	help
+	  Protects the engine driver speed update functions using a mutex.
+
+source "Kconfig.zephyr"

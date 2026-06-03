@@ -7,7 +7,16 @@
 	aliases {
 		as5600 = &as5600;
 	};
+
+	engine: engine {
+		compatible = "generic-engine";
+		pwms = <&pwm2 1 50000 PWM_POLARITY_NORMAL>, /* RPWM (TIM2 CH1) on PA0 */
+		       <&pwm2 2 50000 PWM_POLARITY_NORMAL>; /* LPWM (TIM2 CH2) on PA1 */
+		enable-gpios = <&gpioa 4 GPIO_ACTIVE_HIGH>;  /* Enable (R_EN/L_EN) on PA4 */
+		status = "okay";
+	};
 };
+
 
 &i2c1 {
 	status = "disabled";
@@ -27,3 +36,13 @@
 		fast-filter-threshold = <2>; /* 2 LSB fast filter threshold */
 	};	
 };
+
+&timers2 {
+	status = "okay";
+	pwm2: pwm {
+		status = "okay";
+		pinctrl-0 = <&tim2_ch1_pa0 &tim2_ch2_pa1>; /* PA0 (RPWM) & PA1 (LPWM) */
+		pinctrl-names = "default";
+	};
+};
+

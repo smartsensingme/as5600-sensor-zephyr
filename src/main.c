@@ -4,6 +4,7 @@
  */
 
 #include "as5600.h"
+#include "engine_driver.h"
 #include "kalman.h"
 #include <stdio.h>
 #include <zephyr/device.h>
@@ -194,6 +195,27 @@ static int get_engine_angle(const struct device *dev, float *raw_deg) {
   return ret;
 }
 
+/*
+ * Configuração estática do driver do motor (engine):
+ * Esses dados são definidos em app.overlay e engine_driver.dts e são
+ * passados para a estrutura engine_config através de macros Zephyr.
+ *
+ * - pwm: Obtém a especificação do PWM (TIM2 CH1 no pino PA0) diretamente do
+ *   nó 'engine' definido no Devicetree (app.overlay). O período padrão é 50us
+ * (20 kHz).
+ *
+ * - dir_l_plus: Obtém a especificação da GPIO do pino L+ de controle de direção
+ *   (pino PA1) definida no Devicetree.
+ *
+ * - dir_l_minus: Obtém a especificação da GPIO do pino L- de controle de
+ * direção (pino PA4) definida no Devicetree.
+ */
+static struct engine_config engine = {
+    .pwm_fwd = PWM_DT_SPEC_GET_BY_IDX(DT_NODELABEL(engine), 0),
+    .pwm_rev = PWM_DT_SPEC_GET_BY_IDX(DT_NODELABEL(engine), 1),
+    .enable = GPIO_DT_SPEC_GET_OR(DT_NODELABEL(engine), enable_gpios, {0}),
+};
+
 int main(void) {
   const struct device *const dev = DEVICE_DT_GET_ANY(custom_as5600);
 
@@ -211,6 +233,19 @@ int main(void) {
   }
 
   printf("AS5600 device %s is ready\n", dev->name);
+
+  // Initialize Engine Driver
+  printf("Initializing Engine Driver...\n");
+  int ret_engine = engine_driver_init(&engine);
+  if (ret_engine < 0) {
+    printf("Error: Failed to initialize engine driver (%d)\n", ret_engine);
+    return 0;
+  }
+  printf("Engine Driver initialized successfully!\n");
+
+  // Spin engine at fixed 50% speed for testing
+  printf("Setting engine speed to 50.0%%\n");
+  engine_driver_set_speed(&engine, 16.0f);
 
   float raw_deg = 0.0f;
   struct kalman_3d filter;

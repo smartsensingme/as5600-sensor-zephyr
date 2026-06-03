@@ -4,3 +4,6 @@
 [submodule "custom_drivers"]
 	path = custom_drivers
 	url = https://github.com/smartsensingme/zephyr_custom_drivers.git
+[submodule "src/engine-driver"]
+	path = src/engine-driver
+	url = git@github-ssme:smartsensingme/zephyr-stmg431rb-engine-driver.git
