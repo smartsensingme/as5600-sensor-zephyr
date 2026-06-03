@@ -215,12 +215,48 @@ int main(void) {
   float raw_deg = 0.0f;
   struct kalman_3d filter;
 
+  /*
+   * Configuração customizada para o Filtro de Kalman 3D:
+   *
+   * - q_theta (Covariância do ruído do processo para posição/ângulo):
+   *   Valores menores fazem o filtro confiar mais no modelo físico (mais suave,
+   * mas com maior atraso/lag). Valores maiores fazem o filtro confiar mais nas
+   * medições (mais responsivo, mas com mais ruído/jitter). Valor padrão:
+   * 0.001f.
+   *
+   * - q_omega (Covariância do ruído do processo para velocidade angular):
+   *   Determina quão rápido o filtro reage a mudanças na velocidade angular.
+   *   Valores maiores permitem adaptação mais rápida a
+   * acelerações/desacelerações repentinas. Valor padrão: 10.0f.
+   *
+   * - q_alpha (Covariância do ruído do processo para aceleração angular):
+   *   Determina a velocidade com que o filtro rastreia mudanças na aceleração.
+   *   Valor padrão: 100.0f.
+   *
+   * - r (Covariância do ruído de medição):
+   *   Representa o nível de ruído/variância nas leituras brutas do sensor
+   * AS5600. Um valor maior indica que o sensor é mais ruidoso, fazendo o filtro
+   * suavizar mais os dados. Valor padrão: 0.018f.
+   *
+   * Guia de Ajuste (Tuning):
+   * 1. Se o ângulo filtrado apresentar atraso (lag) durante a rotação física,
+   * aumente q_theta, q_omega e q_alpha.
+   * 2. Se o ângulo filtrado oscilar muito (ruído/jitter) quando o sensor
+   * estiver parado ou em movimento lento, diminua q_theta/q_omega ou aumente r.
+   */
+  kalman_3d_config_t filter_cfg = {
+      .q_theta = 0.001f,
+      .q_omega = 10.0f,
+      .q_alpha = 100.0f,
+      .r = 0.018f,
+  };
+
   /* Perform a first read to initialize the Kalman Filter with the correct
    * initial angle */
   if (get_engine_angle(dev, &raw_deg) >= 0) {
-    kalman_3d_init(&filter, raw_deg, NULL);
+    kalman_3d_init(&filter, raw_deg, &filter_cfg);
   } else {
-    kalman_3d_init(&filter, 0.0f, NULL);
+    kalman_3d_init(&filter, 0.0f, &filter_cfg);
   }
 
   uint32_t loop_count = 0;
