@@ -2,7 +2,7 @@
 
 *Leia em outros idiomas: [English](README.md)*
 
-Este repositório contém a demonstração de integração do codificador magnético **AS5600** com o **Zephyr RTOS**, utilizando um driver nativo do tipo *out-of-tree* e um **Filtro de Kalman 3D** avançado para estimar a posição, a velocidade (RPM) e a aceleração (RPM/s) de um eixo rotativo em tempo real.
+Este repositório contém a demonstração de integração do codificador magnético **AS5600** e do **Driver de Motor DC em Ponte H BTS7960 (IBT-2)** com o **Zephyr RTOS**, utilizando um driver nativo de sensor do tipo *out-of-tree*, um controlador de motor de alta performance em modo Dual-PWM (slow decay), e um **Filtro de Kalman 3D** avançado para estimar a posição, a velocidade (RPM) e a aceleração (RPM/s) de um eixo rotativo em tempo real.
 
 O projeto está configurado para rodar na placa de desenvolvimento **WeAct STM32G431 Core Board** e consome dependências externas através de submódulos do Git.
 
@@ -40,12 +40,34 @@ Isso impede picos falsos e instabilidades no cálculo da velocidade e aceleraç�
 
 ---
 
+## 🏎️ Driver de Motor Ponte H BTS7960 (IBT-2)
+
+O projeto inclui um driver modular para controle de motor DC em ponte H localizado na pasta [src/engine-driver](src/engine-driver), o qual é importado como submódulo Git a partir do repositório [zephyr-stmg431rb-engine-driver](https://github.com/smartsensingme/zephyr-stmg431rb-engine-driver.git).
+
+### Principais Recursos
+* **Modo de Condução Slow-Decay:** Aciona o motor utilizando dois canais de PWM de hardware complementares (`TIM2` CH1 no pino `PA0` para avanço e `TIM2` CH2 no pino `PA1` para recuo), resultando em freio ativo por recirculação na parte baixa da ponte. Isso confere excelente linearidade de torque e velocidade.
+* **Mapeamento Direto por Resolução de Hardware:** O comando de velocidade (de `-100.0f` a `100.0f`) mapeia diretamente os ciclos de clock físicos do timer de hardware (ex: 7200 passos a 20 kHz), otimizando a precisão sem limites lógicos intermediários (como passos de 10 ou 12 bits).
+* **Diagnóstico no Boot:** No boot, o driver imprime a frequência física configurada e a quantidade de passos de resolução real no console, emitindo avisos de alerta se a resolução for menor do que 1024 passos.
+* **Dead-Time de Software & Segurança:** Desliga ambos os canais de PWM e aguarda 50 microssegundos ao inverter a direção física para proteger a ponte H contra curtos-circuitos (*shoot-through*).
+
+---
+
 ## ⚙️ Configurações do Projeto
 
 ### Devicetree (`app.overlay`)
 O sensor é definido no barramento I2C2 da placa (pinos `PA9` para SCL e `PA8` para SDA) operando em *Fast Mode* (400 kHz). As propriedades do filtro de hardware do sensor podem ser sintonizadas via propriedades dts:
 
 ```dts
+/ {
+	engine: engine {
+		compatible = "generic-engine";
+		pwms = <&pwm2 1 50000 PWM_POLARITY_NORMAL>, /* TIM2 CH1 no PA0 (50us = 20kHz) */
+		       <&pwm2 2 50000 PWM_POLARITY_NORMAL>; /* TIM2 CH2 no PA1 (50us = 20kHz) */
+		enable-gpios = <&gpioa 4 GPIO_ACTIVE_HIGH>;  /* Enable (R_EN/L_EN) no PA4 */
+		status = "okay";
+	};
+};
+
 &i2c2 {
 	status = "okay";
 	pinctrl-0 = <&i2c2_scl_pa9 &i2c2_sda_pa8>;
@@ -60,6 +82,15 @@ O sensor é definido no barramento I2C2 da placa (pinos `PA9` para SCL e `PA8` p
 		fast-filter-threshold = <2>;   /* Limiar do filtro rápido em LSB (0 a 7) */
 	};	
 };
+
+&timers2 {
+	status = "okay";
+	pwm2: pwm {
+		status = "okay";
+		pinctrl-0 = <&tim2_ch1_pa0 &tim2_ch2_pa1>; /* PA0 e PA1 configurados como TIM2 CH1/CH2 */
+		pinctrl-names = "default";
+	};
+};
 ```
 
 ### Kconfig (`prj.conf`)
@@ -68,9 +99,11 @@ Para ativar o driver personalizado e definir a segurança de threads:
 CONFIG_I2C=y
 CONFIG_SENSOR=y
 CONFIG_AS5600=y
-
-# Defina como 'y' se precisar acessar o driver de múltiplas threads do Zephyr
 CONFIG_AS5600_THREAD_SAFE=n
+
+# Configurações de PWM e Controle do Motor
+CONFIG_PWM=y
+CONFIG_ENGINE_THREAD_SAFE=y
 ```
 
 ---
@@ -104,9 +137,14 @@ CONFIG_AS5600_THREAD_SAFE=n
     ```text
     AS5600 Magnetic Encoder Demonstration - High Speed Raw Sampling & 3D Kalman Filter
     AS5600 device custom_as5600@36 is ready
+    Initializing Engine Driver...
+    [Engine Driver] Dual PWM initialized at 20000 Hz.
+    [Engine Driver] Hardware Resolution: 7200 steps.
+    Engine Driver initialized successfully!
+    Setting engine speed to 16.0%
     [AS5600 Status] Byte: 0x20 | Magnet: DETECTED | Strength: OK
-    Raw Angle: 12.350 deg | Kalman Angle: 12.352 deg | Speed: 0.000 RPM | Accel: 0.000 RPM/s
-    Raw Angle: 12.980 deg | Kalman Angle: 12.972 deg | Speed: 10.500 RPM | Accel: 0.820 RPM/s
+    Raw Angle: 12.350 deg | Kalman Angle: 12.352 deg | Speed: 42.100 RPM | Accel: 1.250 RPM/s
+    Raw Angle: 12.980 deg | Kalman Angle: 12.972 deg | Speed: 43.500 RPM | Accel: 0.820 RPM/s
     ```
     
     > **Nota sobre Formatação de Float:** O projeto utiliza uma função auxiliar (`printf_f`) para imprimir valores fracionários (com 3 casas decimais), pois a formatação de ponto flutuante no `printf` padrão do Zephyr é desativada por padrão em plataformas embarcadas para economizar memória Flash.

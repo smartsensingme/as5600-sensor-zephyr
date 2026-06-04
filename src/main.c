@@ -245,7 +245,7 @@ int main(void) {
 
   // Spin engine at fixed 50% speed for testing
   printf("Setting engine speed to 50.0%%\n");
-  engine_driver_set_speed(&engine, 16.0f);
+  engine_driver_set_speed(&engine, 30.0f);
 
   float raw_deg = 0.0f;
   struct kalman_3d filter;
